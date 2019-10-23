@@ -1,0 +1,205 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Libraries
+
+```{r}
+library(aws.ec2)
+library(ssh)
+library(remoter)
+library(tidyverse)
+```
+
+
+Basic
+#https://www.r-bloggers.com/interacting-with-aws-from-r/
+
+Walkthrough
+#https://jagg19.github.io/2019/08/aws-r/ (recent and definitive)
+#https://jagg19.github.io/2019/08/https-aws-r/ (security angle with load balancer)
+
+ssh from Rstudio desktop and running multicore in parallel
+#https://janlauge.github.io/2019/building-our-own-open-source-supercomputer-with-R/
+
+Great series running multiple in parallel
+#https://www.daeconomist.com/post/2018-06-27-aws/
+
+Walk through to set up micro instance directly on AWS EC2 with terminal steps
+#https://blog.davisvaughan.com/2017/05/15/rstudio-shiny-aws-1/
+
+Cloudyr package
+#https://github.com/cloudyr/aws.ec2
+
+Walk through from 2018 sets up only with port 80 and web portal
+#http://www.sastibe.de/2018/01/setting-up-a-scalable-rstudio-instance-in-aws/
+
+Win vector has command line code to set up ssh
+#http://www.win-vector.com/blog/2018/01/setting-up-rstudio-server-quickly-on-amazon-ec2/
+Win vector code to run local + ec2 in parallel
+#http://www.win-vector.com/blog/2016/01/running-r-jobs-quickly-on-many-machines/
+
+h20 cluster on h20
+#https://redoakstrategic.com/h2oaws/
+
+Discussion of docker ami plus ssh
+#https://api.rpubs.com/nathanmietkiewicz/293054
+
+Try to figure out how to run docker with rstudio and python in aws
+#https://www.r-bloggers.com/reticulate-virtualenv-and-python-in-linux/
+
+Runs through set up of rocker image to run on aws linux ami
+#https://mdneuzerling.com/post/user-getting-started-with-r-and-docker/
+
+Full run through in part 1 setting up linux machine with ssh then install RStudio, then use aws.ec2 package in part 2
+#https://www.r-craft.org/category/machine-learning/aws/
+#https://www.r-craft.org/r-news/taking-advanced-analytics-to-the-cloud-part-ii-objects-from-s3-to-r-using-the-aws-s3-package/
+
+```{r}
+source("https://bit.ly/2KnkdzV")
+```
+
+
+```{r}
+Sys.setenv("AWS_ACCESS_KEY_ID" = "AKIAJRFXLSYWKCEEJBMA",
+           "AWS_SECRET_ACCESS_KEY" ="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",
+           "AWS_DEFAULT_REGION" = "us-east-1")
+```
+
+
+```{r}
+# set access credentials
+aws_access <- aws.signature::locate_credentials()
+
+```
+
+
+```{r}
+
+# Describe the AMI (from: http://www.louisaslett.com/RStudio_AMI/)
+ami_image <- "ami-0226a8af83fcecb43"
+aws_describe <- describe_images(ami_image)
+#aws_describe %>% tidy_describe()
+aws_describe[[1]]
+```
+
+
+
+```{r}
+s <- describe_subnets()[[1]]
+g <- describe_sgroups()[[1]]
+```
+
+
+```{r}
+# create an SSH keypair
+my_keypair <- create_keypair("aws-ec2")
+pem_file <- tempfile(fileext = ".pem")
+cat(my_keypair$keyMaterial, file = pem_file)
+## delete keypair
+#delete_keypair(mykeypair)
+```
+
+
+
+```{r}
+aws_type <- "t2.medium"
+#ssh_private_key_file <- "aws-rstudio.pem"
+
+ec2inst <- run_instances(
+  image = ami_image,
+  type = aws_type,
+  sgroup=g,
+  subnet=s,
+  spot_options = c("MaxPrice" = "0.016"),
+  keypair = my_keypair
+  )
+
+Sys.sleep(30)
+ec2inst <- describe_instances(ec2inst)
+ec2inst %>% tidy_describe()
+
+ec2inst_ip <- get_instance_public_ip(ec2inst)
+
+```
+
+
+
+
+```{r}
+aws_status <- instance_status(ec2inst)
+aws_status %>% tidy_describe()
+```
+
+
+
+```{r}
+instance_ip <- get_instance_public_ip(ec2inst)
+if (is.na(instance_ip)) {
+    instance_ip <- associate_ip(i, ips[[1L]])$publicIp
+}
+try(authorize_ingress(g))
+try(authorize_egress(g))
+```
+
+```{r}
+# log in to instance
+library("ssh")
+session <- ssh::ssh_connect(paste0("ubuntu@", instance_ip), keyfile = pem_file, passwd = "rstudio")
+```
+
+
+```{r}
+# write a quick little R script to execute
+#cat("'hello world!'\nsprintf('2+2 is %d', 2+2)\n", file = "helloworld.R")
+
+invisible(ssh::scp_upload(session, "./ct_irs_soi_mid/"))
+
+# upload it to instance
+invisible(ssh::scp_upload(session, "load_ct_irs_1.R"))
+
+```
+
+```{r}
+# execute script on instance
+x <- ssh::ssh_exec_wait(session, "Rscript load_ct_irs_1.R")
+
+```
+
+
+```{r}
+
+# helper function for a random temporary password
+random_tmp_password <- generate_password()
+# CMD string to start remoter::server on instance
+r_cmd_start_remoter <- str_c(
+  "sudo Rscript -e ",
+  "'remoter::server(",
+  "port = 55555, ",
+  "password = %pwd, ",
+  "showmsg = TRUE)'",
+  collapse = "") %>%
+  str_replace("%pwd", str_c('"', random_tmp_password, '"'))
+
+# connect and execute
+plan(multicore)
+x <- future(
+  ssh_exec_wait(
+    session = con,
+    command = r_cmd_start_remoter))
+
+remoter::client(
+  addr = ec2ip,
+  port = 55555,
+  password = random_tmp_password,
+  prompt = "remote")
+
+
+```
+
+
+```{r}
+stop_instances(ec2inst)
+terminate_instances(ec2inst)
+```

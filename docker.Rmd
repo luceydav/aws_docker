@@ -1,0 +1,47 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#https://github.com/jangorecki/dockerfiles/tree/master/r-data.table
+#https://www.rocker-project.org
+
+
+```{r}
+library(data.table)
+library(RSclient)
+conn = RS.connect(port = 33311)
+dt = RS.eval(conn, as.data.table(iris))
+str(dt)
+RS.close(conn)
+```
+
+
+```{bash}
+docker run--rm -p 8787:8787 -e USER=rstudio -e PASSWORD=JiHt6a2wk6VGxh--name=rnode1
+
+
+```
+
+```{bash}
+docker run -e PASSWORD=JiHt6a2wk6VGxh --rm -d -p 8788:8787 --name=rnode12 rocker/tidyverse
+```
+
+
+
+```{r}
+port = 8787:8788
+rscl = lapply(port, function(port) RS.connect(port=port))
+lapply(rscl, RS.eval, {x <- as.data.table(iris); TRUE})
+lapply(rscl, RS.eval, x[, lapply(.SD, mean), Species])
+lapply(rscl, RS.close)
+```
+
+
+
+```{bash}
+docker stop rnode11 rnode12
+```
+
+
+
