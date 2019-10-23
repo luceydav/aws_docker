@@ -62,13 +62,6 @@ source("https://bit.ly/2KnkdzV")
 
 
 ```{r}
-Sys.setenv("AWS_ACCESS_KEY_ID" = "AKIAJRFXLSYWKCEEJBMA",
-           "AWS_SECRET_ACCESS_KEY" ="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",
-           "AWS_DEFAULT_REGION" = "us-east-1")
-```
-
-
-```{r}
 # set access credentials
 aws_access <- aws.signature::locate_credentials()
 
