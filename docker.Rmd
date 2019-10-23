@@ -23,9 +23,6 @@ docker run--rm -p 8787:8787 -e USER=rstudio -e PASSWORD=JiHt6a2wk6VGxh--name=rno
 
 ```
 
-```{bash}
-docker run -e PASSWORD=JiHt6a2wk6VGxh --rm -d -p 8788:8787 --name=rnode12 rocker/tidyverse
-```
 
 
 
