@@ -17,11 +17,7 @@ RS.close(conn)
 ```
 
 
-```{bash}
-docker run--rm -p 8787:8787 -e USER=rstudio -e PASSWORD=JiHt6a2wk6VGxh--name=rnode1
 
-
-```
 
 
 
