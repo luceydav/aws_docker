@@ -1,5 +1,6 @@
 FROM rocker/rstudio:latest
 RUN apt-get update -qq && apt-get -y --no-install-recommends install \
+  libglu1-mesa-dev \
   libxml2-dev \
   libcairo2-dev \
   libsqlite-dev \
